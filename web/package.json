@@ -1,0 +1,13 @@
+{
+  "name": "pokemon-mcp-widget-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/widget-entry.ts --bundle --format=iife --platform=browser --minify --loader:.css=text --outfile=dist/widget.js",
+    "build:dev": "esbuild src/widget-entry.ts --bundle --format=iife --platform=browser --sourcemap --loader:.css=text --outfile=dist/widget.js",
+    "watch": "esbuild src/widget-entry.ts --bundle --format=iife --platform=browser --sourcemap --loader:.css=text --outfile=dist/widget.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}

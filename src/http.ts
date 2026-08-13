@@ -1,5 +1,10 @@
 import { createServer } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  buildWidgetPreviewHtml,
+  fetchLiveWidgetPreviewData,
+  MOCK_WIDGET_DATA,
+} from "./preview-widget.js";
 import { createPokemonMcpServer } from "./server.js";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -28,8 +33,29 @@ const httpServer = createServer(async (req, res) => {
     res
       .writeHead(200, { "content-type": "text/plain; charset=utf-8" })
       .end(
-        "Pokémon MCP server\n\nTools: list_pokemon, get_pokemon, get_type\nMCP endpoint: /mcp\n"
+        "Pokémon MCP server\n\nPreview widget (no ChatGPT):\n  /preview       mock Pikachu\n  /preview/live  live PokéAPI\n\nMCP endpoint: /mcp\n"
       );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/preview") {
+    res
+      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      .end(buildWidgetPreviewHtml(MOCK_WIDGET_DATA));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/preview/live") {
+    try {
+      const data = await fetchLiveWidgetPreviewData();
+      res
+        .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+        .end(buildWidgetPreviewHtml(data));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown preview error";
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" }).end(message);
+    }
     return;
   }
 
@@ -68,4 +94,6 @@ httpServer.listen(port, () => {
   console.log(
     `Pokémon MCP server listening on http://localhost:${port}${MCP_PATH}`
   );
+  console.log(`Widget preview (mock): http://localhost:${port}/preview`);
+  console.log(`Widget preview (live): http://localhost:${port}/preview/live`);
 });

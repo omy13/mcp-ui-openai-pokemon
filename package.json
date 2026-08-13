@@ -1,17 +1,19 @@
 {
   "name": "pokemon-mcp",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http.ts",
     "start": "node dist/index.js",
     "start:http": "node dist/http.js",
-    "build": "tsc",
-    "smoke": "tsx src/smoke-test.ts"
+    "build:web": "npm --prefix web run build",
+    "build": "npm run build:web && tsc",
+    "smoke": "tsx src/smoke-test.ts",
+    "preview": "npm run build:web && echo 'Abre http://localhost:8787/preview (con npm run dev:http)'"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "zod": "^3.24.2"
   },

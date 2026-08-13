@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
+web/node_modules/
 
 # Build output
 dist/
+web/dist/
 
 # Environment & secrets
 .env
@@ -36,3 +38,6 @@ coverage/
 
 # Optional local overrides
 *.local
+
+# Large local media (keep README screenshots in images/)
+*.mov

@@ -1,12 +1,46 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  registerAppTool,
+  registerAppResource,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import { PokeApiClient } from "./pokeapi-client.js";
+import { buildWidgetHtml, WIDGET_URI } from "./widget-resource.js";
 
 const READ_ONLY = {
   readOnlyHint: true,
   openWorldHint: true,
   destructiveHint: false,
 } as const;
+
+const pokemonOutputSchema = {
+  id: z.number().int(),
+  name: z.string(),
+  height: z.number(),
+  weight: z.number(),
+  types: z.array(z.string()),
+  abilities: z.array(
+    z.object({
+      name: z.string(),
+      isHidden: z.boolean(),
+    })
+  ),
+  stats: z.array(
+    z.object({
+      name: z.string(),
+      baseStat: z.number().int(),
+    })
+  ),
+  spriteUrl: z.string().nullable(),
+  speciesUrl: z.string(),
+};
+
+const WIDGET_TOOL_META = {
+  ui: { resourceUri: WIDGET_URI },
+  "openai/toolInvocation/invoking": "Rendering Pokémon card…",
+  "openai/toolInvocation/invoked": "Pokémon card ready.",
+};
 
 export function createPokemonMcpServer() {
   const pokeapi = new PokeApiClient(
@@ -16,12 +50,42 @@ export function createPokemonMcpServer() {
   const server = new McpServer(
     {
       name: "pokemon-mcp",
-      version: "0.1.0",
+      version: "0.2.0",
     },
     {
       instructions:
-        "Use list_pokemon to browse or page through Pokémon. Use get_pokemon for details of one Pokémon by name or id. Use get_type for type matchups. Prefer stable ids/names from tool results in follow-up calls.",
+        "Use list_pokemon to browse. Use get_pokemon for one Pokémon by name or id. Use get_type for type matchups. After get_pokemon, call render_pokemon_widget with the same fields to show the visual card. Prefer stable ids/names from tool results.",
     }
+  );
+
+  const widgetHtml = buildWidgetHtml();
+
+  registerAppResource(
+    server,
+    "pokemon-card-widget",
+    WIDGET_URI,
+    {},
+    async () => ({
+      contents: [
+        {
+          uri: WIDGET_URI,
+          mimeType: RESOURCE_MIME_TYPE,
+          text: widgetHtml,
+          _meta: {
+            ui: {
+              prefersBorder: true,
+              csp: {
+                resourceDomains: [
+                  "https://raw.githubusercontent.com",
+                  "https://fonts.googleapis.com",
+                  "https://fonts.gstatic.com",
+                ],
+              },
+            },
+          },
+        },
+      ],
+    })
   );
 
   server.registerTool(
@@ -29,7 +93,7 @@ export function createPokemonMcpServer() {
     {
       title: "List Pokémon",
       description:
-        "Use this when the user wants to browse or discover Pokémon. Returns a page of names and ids from PokéAPI.",
+        "Use this when the user wants to browse or discover Pokémon. Returns a page of names and ids from PokéAPI. Does not render UI.",
       inputSchema: {
         limit: z
           .number()
@@ -86,34 +150,14 @@ export function createPokemonMcpServer() {
     {
       title: "Get Pokémon details",
       description:
-        "Use this when the user asks about a specific Pokémon. Accepts a name (e.g. pikachu) or numeric id.",
+        "Fetch details for one Pokémon by name or id. Data-only tool: after this, call render_pokemon_widget to show the visual card.",
       inputSchema: {
         nameOrId: z
           .string()
           .min(1)
           .describe("Pokémon name or id, e.g. pikachu or 25."),
       },
-      outputSchema: {
-        id: z.number().int(),
-        name: z.string(),
-        height: z.number(),
-        weight: z.number(),
-        types: z.array(z.string()),
-        abilities: z.array(
-          z.object({
-            name: z.string(),
-            isHidden: z.boolean(),
-          })
-        ),
-        stats: z.array(
-          z.object({
-            name: z.string(),
-            baseStat: z.number().int(),
-          })
-        ),
-        spriteUrl: z.string().nullable(),
-        speciesUrl: z.string(),
-      },
+      outputSchema: pokemonOutputSchema,
       annotations: READ_ONLY,
     },
     async ({ nameOrId }) => {
@@ -125,7 +169,7 @@ export function createPokemonMcpServer() {
           content: [
             {
               type: "text",
-              text: `${pokemon.name} (#${pokemon.id}) — types: ${pokemon.types.join(", ")}. Height ${pokemon.height}, weight ${pokemon.weight}.`,
+              text: `${pokemon.name} (#${pokemon.id}) — types: ${pokemon.types.join(", ")}. Height ${pokemon.height}, weight ${pokemon.weight}. Next: call render_pokemon_widget with these fields.`,
             },
           ],
         };
@@ -145,7 +189,7 @@ export function createPokemonMcpServer() {
     {
       title: "Get Pokémon type",
       description:
-        "Use this when the user asks about a type's matchups or which Pokémon have that type. Accepts a type name (e.g. electric) or id.",
+        "Use this when the user asks about a type's matchups or which Pokémon have that type. Accepts a type name (e.g. electric) or id. Does not render UI.",
       inputSchema: {
         nameOrId: z
           .string()
@@ -189,6 +233,49 @@ export function createPokemonMcpServer() {
         };
       }
     }
+  );
+
+  registerAppTool(
+    server,
+    "render_pokemon_widget",
+    {
+      title: "Render Pokémon widget",
+      description:
+        "Render the visual Pokémon card. Always call get_pokemon first, then pass its fields (id, name, height, weight, types, abilities, stats, spriteUrl, speciesUrl) to this tool.",
+      inputSchema: {
+        id: z.number().int(),
+        name: z.string(),
+        height: z.number(),
+        weight: z.number(),
+        types: z.array(z.string()),
+        abilities: z.array(
+          z.object({
+            name: z.string(),
+            isHidden: z.boolean(),
+          })
+        ),
+        stats: z.array(
+          z.object({
+            name: z.string(),
+            baseStat: z.number().int(),
+          })
+        ),
+        spriteUrl: z.string().nullable(),
+        speciesUrl: z.string(),
+      },
+      outputSchema: pokemonOutputSchema,
+      annotations: READ_ONLY,
+      _meta: WIDGET_TOOL_META,
+    },
+    async (pokemon) => ({
+      structuredContent: pokemon,
+      content: [
+        {
+          type: "text",
+          text: `Showing card for ${pokemon.name} (#${pokemon.id}). Do not repeat the stats as a markdown table.`,
+        },
+      ],
+    })
   );
 
   return server;
