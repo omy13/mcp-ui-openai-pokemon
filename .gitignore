@@ -41,3 +41,6 @@ coverage/
 
 # Large local media (keep README screenshots in images/)
 *.mov
+
+# MCP Events subscriptions (local store)
+data/

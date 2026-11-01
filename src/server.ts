@@ -5,6 +5,7 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { registerPokemonEvents } from "./events.js";
 import { PokeApiClient } from "./pokeapi-client.js";
 import { buildWidgetHtml, WIDGET_URI } from "./widget-resource.js";
 
@@ -277,6 +278,8 @@ export function createPokemonMcpServer() {
       ],
     })
   );
+
+  registerPokemonEvents(server);
 
   return server;
 }

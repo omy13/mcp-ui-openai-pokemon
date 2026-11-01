@@ -10,11 +10,13 @@
     "build:web": "npm --prefix web run build",
     "build": "npm run build:web && tsc",
     "smoke": "tsx src/smoke-test.ts",
+    "events:receiver": "tsx src/dev-event-receiver.ts",
     "preview": "npm run build:web && echo 'Abre http://localhost:8787/preview (con npm run dev:http)'"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "standardwebhooks": "^1.1.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {

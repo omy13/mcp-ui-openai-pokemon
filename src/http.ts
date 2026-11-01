@@ -1,14 +1,29 @@
-import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
+import { createServer, type IncomingMessage } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   buildWidgetPreviewHtml,
   fetchLiveWidgetPreviewData,
   MOCK_WIDGET_DATA,
 } from "./preview-widget.js";
+import { dispatchPokemonAppeared } from "./events.js";
+import { PokeApiClient } from "./pokeapi-client.js";
 import { createPokemonMcpServer } from "./server.js";
 
 const port = Number(process.env.PORT ?? 8787);
 const MCP_PATH = "/mcp";
+const pokeapi = new PokeApiClient(
+  process.env.POKEAPI_BASE_URL ?? "https://pokeapi.co/api/v2"
+);
+
+/** El disparador de eventos solo existe si hay DEV_TRIGGER_TOKEN y se envía como Bearer. */
+function isAuthorizedTrigger(req: IncomingMessage): boolean {
+  const token = process.env.DEV_TRIGGER_TOKEN;
+  if (!token) return false;
+  const expected = Buffer.from(`Bearer ${token}`);
+  const received = Buffer.from(req.headers.authorization ?? "");
+  return expected.length === received.length && timingSafeEqual(expected, received);
+}
 
 const httpServer = createServer(async (req, res) => {
   if (!req.url) {
@@ -33,7 +48,7 @@ const httpServer = createServer(async (req, res) => {
     res
       .writeHead(200, { "content-type": "text/plain; charset=utf-8" })
       .end(
-        "Pokémon MCP server\n\nPreview widget (no ChatGPT):\n  /preview       mock Pikachu\n  /preview/live  live PokéAPI\n\nMCP endpoint: /mcp\n"
+        "Pokémon MCP server\n\nPreview widget (no ChatGPT):\n  /preview       mock Pikachu\n  /preview/live  live PokéAPI\n\nMCP endpoint: /mcp\nMCP Events trigger: POST /dev/wild-pokemon?name=charmander (Bearer DEV_TRIGGER_TOKEN)\n"
       );
     return;
   }
@@ -54,6 +69,27 @@ const httpServer = createServer(async (req, res) => {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown preview error";
+      res.writeHead(500, { "content-type": "text/plain; charset=utf-8" }).end(message);
+    }
+    return;
+  }
+
+  // Simula que aparece un Pokémon salvaje y lo envía a las suscripciones de MCP Events.
+  if (req.method === "POST" && url.pathname === "/dev/wild-pokemon") {
+    if (!isAuthorizedTrigger(req)) {
+      res.writeHead(404).end("Not Found");
+      return;
+    }
+    try {
+      const nameOrId =
+        url.searchParams.get("name") ?? String(1 + Math.floor(Math.random() * 151));
+      const pokemon = await pokeapi.getPokemon(nameOrId);
+      const result = await dispatchPokemonAppeared(pokemon);
+      res
+        .writeHead(200, { "content-type": "application/json; charset=utf-8" })
+        .end(JSON.stringify(result, null, 2));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
       res.writeHead(500, { "content-type": "text/plain; charset=utf-8" }).end(message);
     }
     return;
